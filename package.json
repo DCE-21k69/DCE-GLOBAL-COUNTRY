@@ -1,0 +1,28 @@
+{
+  "name": "dce-global-country",
+  "version": "1.0.0-alpha",
+  "private": true,
+  "description": "DCE Global Country — Simulador Geopolítico de Naciones (MMO de navegador). Monorepo: shared (dominio), api (Fastify) y client (Pixi.js).",
+  "packageManager": "pnpm@10.12.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @dce/api --filter @dce/client dev",
+    "dev:api": "pnpm --filter @dce/api dev",
+    "dev:client": "pnpm --filter @dce/client dev",
+    "build": "pnpm --filter @dce/shared typecheck && pnpm --filter @dce/api typecheck && pnpm --filter @dce/client build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:init": "psql \"$DATABASE_URL\" -f sql/schema.sql",
+    "db:seed": "psql \"$DATABASE_URL\" -f sql/seed.sql"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
