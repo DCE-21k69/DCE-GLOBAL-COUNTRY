@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DCE Global Country — Alpha</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🌍</text></svg>" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- HUD superior: identidad, recursos, tick (GDD §7) -->
+      <header id="hud">
+        <div id="hud-left">
+          <span id="nation-name">🌍 DCE Global Country</span>
+          <span class="hud-badge">ALPHA v0.1</span>
+          <span id="seed-chip" class="hud-badge" title="Seed del mundo (determinista)"></span>
+        </div>
+        <div id="hud-resources">
+          <div class="res" title="Crédito Global (GDD §4.1)"><span class="res-icon">💰</span><b>CG</b><span id="res-cg">—</span></div>
+          <div class="res" title="Comida — Tier 1"><span class="res-icon">🌾</span><b>Comida</b><span id="res-food">—</span></div>
+          <div class="res" title="Acero — Tier 2"><span class="res-icon">🏗️</span><b>Acero</b><span id="res-steel">—</span></div>
+          <div class="res" title="Petróleo — Tier 1"><span class="res-icon">🛢️</span><b>Petróleo</b><span id="res-oil">—</span></div>
+          <div class="res" title="Próximo Tick (GDD §5)"><span class="res-icon">⏱️</span><b>Tick</b><span id="res-tick">—</span></div>
+        </div>
+        <div id="hud-right">
+          <span id="connection">● Conectando…</span>
+        </div>
+      </header>
+
+      <!-- Barra lateral: navegación (Dashboard, Ministerios, Diplomacia) -->
+      <aside id="sidebar">
+        <nav>
+          <button class="nav-btn active" data-panel="dashboard" title="Noticias y alertas">📊 Dashboard</button>
+          <button class="nav-btn" data-panel="economy" title="Industria, impuestos (GDD §4)">🏭 Ministerio de Economía</button>
+          <button class="nav-btn" data-panel="defense" title="Ejércitos y frentes (GDD §6)">🪖 Ministerio de Defensa</button>
+          <button class="nav-btn" data-panel="diplomacy" title="Relaciones y Asamblea (GDD §6.3)">🕊️ Diplomacia y Asamblea</button>
+        </nav>
+        <div id="panel"></div>
+      </aside>
+
+      <!-- Pantalla principal: mapa WebGL -->
+      <main id="map-panel">
+        <div id="map-toolbar">
+          <div class="seg" id="filter-seg">
+            <button class="seg-btn active" data-filter="politics">🌐 Político</button>
+            <button class="seg-btn" data-filter="resources">⛏️ Recursos</button>
+            <button class="seg-btn" data-filter="military">⚔️ Militar</button>
+          </div>
+          <div id="map-controls">
+            <button id="zoom-in" title="Acercar">＋</button>
+            <button id="zoom-out" title="Alejar">−</button>
+            <button id="reset-view" title="Centrar mundo">⌂</button>
+          </div>
+          <div id="legend"></div>
+        </div>
+        <canvas id="map"></canvas>
+        <div id="hex-inspector" class="hidden"></div>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

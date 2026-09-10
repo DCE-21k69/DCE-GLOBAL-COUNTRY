@@ -1,0 +1,26 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Entornos
+.env
+.env.*
+!.env.example
+
+# Logs y cachés
+*.log
+.vite/
+coverage/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Datos volátiles del motor (los .sql son versionados, los dumps no)
+*.dump
