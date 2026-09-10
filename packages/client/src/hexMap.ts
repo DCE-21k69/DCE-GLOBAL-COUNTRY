@@ -31,12 +31,20 @@ export interface HexMapOptions {
 /** Borde "hull" para que los hexágonos compartan arista sin fisuras. */
 const BORDER_COLOR = 0x0a1120;
 
+/** '#rrggbb' → 0xrrggbb (para Pixi Graphics). */
+function parseColor(hexColor: string): number | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hexColor)) return null;
+  return parseInt(hexColor.slice(1), 16);
+}
+
 export class HexMap {
   private app: Application;
   private worldContainer: Container;
   private uiContainer: Container;
   private hexes = new Map<string, WorldHex>();
   private graphics = new Map<string, Graphics>();
+  /** Colores reales por país (del servidor), en formato Pixi 0xrrggbb. */
+  private colors = new Map<string, number>();
   private selection: Graphics;
   private filter: MapFilter = 'politics';
   private onSelect: HexMapOptions['onSelect'];
@@ -75,12 +83,39 @@ export class HexMap {
 
   setWorld(world: WorldMap): void {
     this.hexes.clear();
-    for (const h of world.hexes) this.hexes.set(hexKey(h), h);
     this.worldContainer.removeChildren();
     this.graphics.clear();
+    this.updateColors(world);
+    this.rebuildGraphics(world);
+    this.restyleAll();
+    this.centerWorld();
+  }
+
+  /**
+   * Actualiza el mundo sin reiniciar la cámara (eventos en vivo: fundación,
+   * conquista…). Reutiliza los Graphics existentes y solo re-estiliza.
+   */
+  updateWorld(world: WorldMap): void {
+    this.hexes.clear();
+    for (const h of world.hexes) this.hexes.set(hexKey(h), h);
+    this.updateColors(world);
+    this.rebuildGraphics(world);
+    this.restyleAll();
+  }
+
+  private updateColors(world: WorldMap): void {
+    this.colors.clear();
+    for (const c of world.countries) {
+      const color = parseColor(c.color);
+      if (color !== null) this.colors.set(c.id, color);
+    }
+  }
+
+  private rebuildGraphics(world: WorldMap): void {
     // Un Graphics por hexágono: la geometría se regenera solo en cambios
     // de filtro/estado; zoom y pan no tocan estas primitivas.
     for (const hex of world.hexes) {
+      if (this.graphics.has(hexKey(hex))) continue;
       const g = new Graphics();
       g.eventMode = 'static';
       g.cursor = 'pointer';
@@ -96,8 +131,6 @@ export class HexMap {
       this.graphics.set(hexKey(hex), g);
       this.worldContainer.addChild(g);
     }
-    this.restyleAll();
-    this.centerWorld();
   }
 
   setFilter(filter: MapFilter): void {
@@ -193,7 +226,10 @@ export class HexMap {
 
     switch (this.filter) {
       case 'politics':
-        fill = hex.countryId ? this.colorFromString(hex.countryId) : 0x9aa6b8;
+        fill =
+          hex.countryId !== null
+            ? this.colors.get(hex.countryId) ?? this.colorFromString(hex.countryId)
+            : 0x9aa6b8;
         opacity = hex.countryId ? 0.85 : 0.35;
         break;
       case 'resources':

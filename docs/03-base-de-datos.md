@@ -39,7 +39,8 @@ users ────── espionage_missions (spy) → countries (target)
 | Tabla | Propósito | Claves |
 | --- | --- | --- |
 | `worlds` | Un reino persistente. En el Alpha hay uno solo; en v1.0, varios mundos = sharding natural. | PK `id` SMALLINT |
-| `hexagons` | Cada celda: `(world_id, q, r)` axiales, bioma, elevación, `country_id` dueño. **La geometría (píxeles) no se almacena jamás**: se calcula en `@dce/shared` (doc 04). | UNIQUE `(world_id, q, r)`; índices de consulta espacial y por dueño. |
+| `hexagons` | Cada celda: `(world_id, q, r)` axiales, bioma, elevación. **La geometría (píxeles) no se almacena jamás**: se calcula en `@dce/shared` (doc 04). | UNIQUE `(world_id, q, r)`; índice espacial de consulta. |
+| `country_hexes` | **Propiedad del territorio** (hex → país, volátil): los cambios de dueño son frecuentes (fundación, guerra) y se aíslan del terreno estático. Solo persisten países de jugadores; el territorio NPC se deriva del generador determinista. | PK `(world_id, q, r)`; índice `(country_id)` para reconstruir territorio. |
 
 ### 2.3. Economía (GDD §4)
 
@@ -82,7 +83,7 @@ PIB = Σ(producción de hexágonos × precios de mercado)
 4. **CITEXT** para identificadores legibles (usernames, emails) — evita duplicados tipo `Player` vs `player`.
 5. **Índices pensados para los queries calientes del juego:**
    - `hexagons (world_id, q, r)` → clic en el mapa, vecinos (la pantalla hace 7 lookups O(1)).
-   - `hexagons (country_id) WHERE country_id IS NOT NULL` → reconstrucción de territorio.
+   - `country_hexes (country_id)` → reconstrucción de territorio y render de dueños.
    - `ledger_entries (country_id, created_at DESC)` → extractos y analítica.
    - `armies (hex_id)` → ¿quién hay en este frente?
 6. **Integridad de estados por CHECK** (enums de roles, biomas, tipos de tratado) — el motor no puede escribir basura ni siquiera por bug.

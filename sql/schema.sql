@@ -54,7 +54,11 @@ CREATE TABLE countries (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id       SMALLINT NOT NULL REFERENCES worlds(id),
   name           TEXT NOT NULL,
-  flag_svg       TEXT,                             -- creador de bandas (GDD §3.1)
+  color          TEXT NOT NULL DEFAULT '#3b82f6',  -- color del mapa (#rrggbb)
+  flag_json      JSONB NOT NULL DEFAULT '{}'::jsonb, -- bandera por capas (GDD §3.1)
+  population     INTEGER NOT NULL DEFAULT 100,
+  cap_q          INT,                              -- capital: coordenada axial q
+  cap_r          INT,                              -- capital: coordenada axial r
   founded_by     UUID REFERENCES users(id),
   founded_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   is_pariah      BOOLEAN NOT NULL DEFAULT FALSE,  -- se retiró de la Asamblea (GDD §6.3)
@@ -98,14 +102,24 @@ CREATE TABLE hexagons (
   biome      TEXT NOT NULL CHECK (biome IN ('plain','forest','mountain','desert','coast')),
   elevation  REAL NOT NULL DEFAULT 0,
   is_coast   BOOLEAN NOT NULL DEFAULT FALSE,
-  is_capital BOOLEAN NOT NULL DEFAULT FALSE,
-  country_id UUID REFERENCES countries(id),
   UNIQUE (world_id, q, r)
 );
 -- Consulta espacial crítica (pantalla → hex → vecinos) en O(1):
 CREATE INDEX idx_hexagons_world ON hexagons (world_id, q, r);
--- ¿Qué posee un país? (reconstrucción de territorio tras crash):
-CREATE INDEX idx_hexagons_country ON hexagons (country_id) WHERE country_id IS NOT NULL;
+
+-- Propiedad del territorio: qué país posee cada hexágono.
+-- Solo los países de jugadores persisten aquí; el territorio de las naciones
+-- NPC se deriva del generador procedural determinista (misma seed).
+CREATE TABLE country_hexes (
+  world_id   SMALLINT NOT NULL REFERENCES worlds(id),
+  q          INT NOT NULL,
+  r          INT NOT NULL,
+  country_id UUID NOT NULL REFERENCES countries(id) ON DELETE CASCADE,
+  is_capital BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (world_id, q, r)
+);
+-- ¿Qué territorio posee un país? (reconstrucción tras crash):
+CREATE INDEX idx_country_hexes_country ON country_hexes (country_id);
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ECONOMÍA: MONEDAS Y RESERVAS

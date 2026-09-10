@@ -2,16 +2,17 @@
 
 **Simulador Geopolítico de Naciones** — MMO de navegador donde los jugadores fundan países en un mapa hexagonal procedural, gestionan su economía y constitución, declaran guerras y viven como ciudadanos de las naciones de otros jugadores.
 
-**Estado actual: Alpha v0.1** — mapa mundial procedimental renderizado en WebGL, HUD estratégico, CI y documentación técnica completa.
+**Estado actual: Alpha v0.2** — cuentas de usuario, fundación de naciones en el mapa (con Constitución y buffs/debuffs reales), motor de Ticks económicos, persistencia con doble adaptador (memoria/PostgreSQL), eventos en vivo por WebSocket y CI.
 
 ## 📁 Estructura del monorepo
 
 | Ruta | Qué contiene |
 | --- | --- |
 | [`docs/`](docs/) | GDD canónico + los 4 entregables técnicos (arquitectura, roadmap, BD, mapa hexagonal) |
-| [`packages/shared/`](packages/shared/) | Matemáticas hexagonales, generador procedural determinista y tipos de dominio (cliente + servidor) |
-| [`packages/api/`](packages/api/) | Backend Fastify: `GET /api/world`, `GET /health` |
-| [`packages/client/`](packages/client/) | Cliente web: mapa WebGL (Pixi.js v8), filtros, zoom/pan, inspector de hexágonos, HUD |
+| [`packages/shared/`](packages/shared/) | Matemáticas hexagonales, generador procedural determinista, Constitución y tipos de dominio (cliente + servidor) |
+| [`packages/simulation/`](packages/simulation/) | **Motor del juego**: estado del mundo en RAM, fundación de naciones y Ticks económicos |
+| [`packages/api/`](packages/api/) | Backend Fastify: auth (JWT), `POST /api/countries`, `/api/world`, `/api/me`, WebSocket `/ws` |
+| [`packages/client/`](packages/client/) | Cliente web: mapa WebGL (Pixi.js v8), login/registro, fundación de naciones, panel "Mi País", HUD en vivo |
 | [`sql/`](sql/) | Esquema PostgreSQL ejecutable (`schema.sql`) + datos de arranque (`seed.sql`) |
 
 ## 🚀 Puesta en marcha
@@ -36,20 +37,28 @@ pnpm build
 
 Abre `http://localhost:5173` para ver el mapa mundial interactivo.
 
-**Base de datos (opcional en el Alpha):**
+**Persistencia y variables de entorno** (ver [`.env.example`](.env.example)):
+
+- Sin `DATABASE_URL` → `MemoryStore` (el mundo se reinicia con el proceso; ideal para desarrollo y preview).
+- Con `DATABASE_URL` → `PostgresStore` (aplicar antes `sql/schema.sql` + `sql/seed.sql`).
+- `TICK_SECONDS` controla la duración del Tick económico (600 s en producción, 45 s en desarrollo).
+- `JWT_SECRET` firma las sesiones (cámbialo en producción).
 
 ```bash
 createdb dce_global_country
 psql dce_global_country -f sql/schema.sql -f sql/seed.sql
+# y arrancar con:
+DATABASE_URL=postgres://localhost:5432/dce_global_country pnpm dev
 ```
 
-## 🎮 Qué puedes hacer ahora (Alpha v0.1)
+## 🎮 Qué puedes hacer ahora (Alpha v0.2)
 
-- Ver el mundo procedural (misma seed → mismo mapa, determinista).
-- Navegar: arrastrar para mover, rueda para zoom, botones para acercar/alejar.
-- Cambiar entre filtros **Político / Recursos / Militar**.
-- Hacer clic en cualquier hexágono para inspeccionarlo (bioma, recursos, dueño).
-- Explorar los ministerios en la barra lateral (economía, defensa, diplomacia).
+- **Crear cuenta / entrar** (botón "🔑 Entrar" en la barra superior).
+- **Fundar una nación**: haz clic en un hexágono gris de la frontera y pulsa "🏛️ Fundar nación aquí". Elige nombre, color y **Constitución** (gobierno, economía, doctrina militar, migración) con sus buffs/debuffs.
+- Ver tu nación en el panel **"Mi País"**: reservas, población, hexágonos y constitución.
+- **Economía viva**: cada Tick tu territorio produce comida, hierro, carbón, piedra y petróleo según sus biomas y tu constitución; tu población consume comida y paga impuestos en Crédito Global.
+- Ver en **tiempo real** las naciones que fundan otros jugadores (WebSocket).
+- Navegar el mapa: filtros Político/Recursos/Militar, zoom, arrastre e inspector de hexágonos.
 
 ## 📖 Documentación
 
@@ -64,9 +73,13 @@ psql dce_global_country -f sql/schema.sql -f sql/seed.sql
 ## 🛠️ Stack
 
 - **Frontend:** TypeScript + Vite + Pixi.js v8 (WebGL)
-- **Backend:** Node.js + Fastify (motor de Ticks aislado para posible migración a Go)
-- **Base de datos:** PostgreSQL 16 + Redis (chat, mercado, pub/sub — Sprint 3+)
+- **Backend:** Node.js + Fastify + JWT + WebSocket (motor de Ticks aislado en `@dce/simulation`, listo para migrar a Go)
+- **Base de datos:** PostgreSQL 16 (adaptador listo; dev usa memoria) + Redis (chat, mercado, pub/sub — Sprint 3+)
 - **CI/CD:** GitHub Actions (tests, tipos y build en cada push)
+
+## 📜 Changelog
+
+Las versiones y sus cambios están en [CHANGELOG.md](CHANGELOG.md).
 
 ## 🤝 Contribuir
 

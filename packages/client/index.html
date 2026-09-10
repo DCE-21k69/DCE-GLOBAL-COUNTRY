@@ -25,6 +25,7 @@
         </div>
         <div id="hud-right">
           <span id="connection">● Conectando…</span>
+          <button id="auth-button" class="hud-btn" data-mode="in" title="Iniciar sesión o crear cuenta">🔑 Entrar</button>
         </div>
       </header>
 
@@ -32,6 +33,7 @@
       <aside id="sidebar">
         <nav>
           <button class="nav-btn active" data-panel="dashboard" title="Noticias y alertas">📊 Dashboard</button>
+          <button class="nav-btn" data-panel="country" title="Tu nación y su constitución">🏛️ Mi País</button>
           <button class="nav-btn" data-panel="economy" title="Industria, impuestos (GDD §4)">🏭 Ministerio de Economía</button>
           <button class="nav-btn" data-panel="defense" title="Ejércitos y frentes (GDD §6)">🪖 Ministerio de Defensa</button>
           <button class="nav-btn" data-panel="diplomacy" title="Relaciones y Asamblea (GDD §6.3)">🕊️ Diplomacia y Asamblea</button>
@@ -58,6 +60,10 @@
         <div id="hex-inspector" class="hidden"></div>
       </main>
     </div>
+
+    <!-- Overlays: modales y notificaciones -->
+    <div id="modal-root"></div>
+    <div id="toasts"></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

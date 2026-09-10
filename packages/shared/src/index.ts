@@ -6,4 +6,5 @@ export * from './types';
 export * from './hex';
 export * from './rng';
 export * from './biomes';
+export * from './constitution';
 export * from './world';

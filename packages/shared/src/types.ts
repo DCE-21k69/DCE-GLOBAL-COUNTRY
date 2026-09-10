@@ -38,6 +38,23 @@ export interface DemoCountry {
   /** Color CSS en formato '#rrggbb'. */
   color: string;
   capital: Hex;
+  /** true si es una nación NPC del mundo base (no fundada por un jugador). */
+  npc?: boolean;
+}
+
+/**
+ * Metadatos persistentes de un país (jugador o NPC).
+ * Es la forma que comparten el motor de simulación y la capa de datos.
+ */
+export interface CountryMeta {
+  id: string;
+  name: string;
+  color: string;
+  foundedBy: string | null;
+  capital: Hex;
+  constitution: Constitution;
+  population: number;
+  createdAt: string;
 }
 
 /** Respuesta del endpoint /api/world: el estado completo del mapa. */
