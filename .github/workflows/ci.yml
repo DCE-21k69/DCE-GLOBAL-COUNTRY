@@ -19,16 +19,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+
+      # Corepack lee `packageManager: pnpm@10.12.4` del package.json raíz
+      # y fija exactamente esa versión (sin depender de acciones externas).
+      - name: Habilitar pnpm (corepack)
+        run: corepack enable
 
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
