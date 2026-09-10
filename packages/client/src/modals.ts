@@ -1,16 +1,19 @@
 // ============================================================================
-// @dce/client — Modales (autenticación y fundación de naciones) + toasts.
-// UI del panel de control geopolítico (GDD §7), construida con DOM simple.
+// @dce/client — Modales + toasts: autenticación, fundación, banderas, wiki,
+// perfil de país y tratados de paz. UI del panel de control (GDD §7).
 // ============================================================================
 
 import {
   CONSTITUTION_OPTIONS,
   DEFAULT_CONSTITUTION,
+  renderFlagSvg,
   type Constitution,
   type ConstitutionPillar,
+  type FlagLayers,
   type WorldHex,
 } from '@dce/shared';
-import { api } from './api';
+import { api, type PublicCountry } from './api';
+import type { PanelContext } from './panels';
 
 export function toast(message: string): void {
   const container = document.getElementById('toasts')!;
@@ -202,4 +205,224 @@ function readConstitution(card: HTMLElement): Constitution {
     militaryDoctrine: String(data.get('militaryDoctrine')) as Constitution['militaryDoctrine'],
     migrationPolicy: String(data.get('migrationPolicy')) as Constitution['migrationPolicy'],
   };
+}
+
+// ── Bandera (creador de banderas por capas, GDD §3.1) ─────────────────────
+
+export function openFlagModal(countryId: string, onDone: () => void): void {
+  const { card, close } = openModal(`
+    <div class="modal-title"><h2>🚩 Creador de Banderas</h2><button class="modal-close" data-close>×</button></div>
+    <p class="muted">Diseño por capas (fondo, colores, emblema): imposible subir imágenes, estilo unificado (GDD §3.1).</p>
+    <div id="flag-preview" style="text-align:center;margin:10px 0"></div>
+    <form id="flag-form" class="form">
+      <label class="field"><span>Patrón de fondo</span>
+        <select name="pattern">
+          <option value="solid">Sólido</option>
+          <option value="stripes" selected>Franjas verticales</option>
+          <option value="cross">Cruz</option>
+        </select></label>
+      <label class="field"><span>Color principal</span><input name="colorA" type="color" value="#0f2a4a"></label>
+      <label class="field"><span>Color secundario</span><input name="colorB" type="color" value="#38bdf8"></label>
+      <label class="field"><span>Emblema</span>
+        <select name="emblem">
+          <option value="none">Sin emblema</option>
+          <option value="star" selected>⭐ Estrella</option>
+          <option value="moon">🌙 Luna</option>
+          <option value="swords">⚔️ Espadas</option>
+          <option value="eagle">🦅 Águila</option>
+          <option value="anchor">⚓ Ancla</option>
+          <option value="wheat">🌾 Espigas</option>
+          <option value="sun">☀️ Sol</option>
+        </select></label>
+      <label class="field"><span>Color del emblema</span><input name="emblemColor" type="color" value="#f5c14e"></label>
+      <button class="btn primary" type="submit">Guardar bandera</button>
+      <p class="form-error" id="flag-error"></p>
+    </form>
+  `);
+  card.querySelector('[data-close]')!.addEventListener('click', close);
+
+  const preview = card.querySelector<HTMLElement>('#flag-preview')!;
+  const readLayers = (): FlagLayers => {
+    const data = new FormData(card.querySelector<HTMLFormElement>('#flag-form')!);
+    return {
+      pattern: String(data.get('pattern')) as FlagLayers['pattern'],
+      colorA: String(data.get('colorA')),
+      colorB: String(data.get('colorB')),
+      emblem: String(data.get('emblem')) as FlagLayers['emblem'],
+      emblemColor: String(data.get('emblemColor')),
+    };
+  };
+  const update = () => (preview.innerHTML = renderFlagSvg(readLayers()));
+  update();
+  card.querySelectorAll('#flag-form select, #flag-form input').forEach((el) => el.addEventListener('input', update));
+
+  card.querySelector<HTMLFormElement>('#flag-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const error = card.querySelector<HTMLElement>('#flag-error')!;
+    error.textContent = '';
+    try {
+      await api.updateFlag(countryId, readLayers());
+      close();
+      toast('🚩 Bandera actualizada.');
+      onDone();
+    } catch (err) {
+      error.textContent = err instanceof Error ? err.message : 'Error';
+    }
+  });
+}
+
+// ── Wiki Nacional (GDD §3.1) ──────────────────────────────────────────────
+
+export function openWikiModal(countryId: string, country: { name: string }, onDone: () => void): void {
+  const { card, close } = openModal(`
+    <div class="modal-title"><h2>📖 Wiki Nacional — ${country.name}</h2><button class="modal-close" data-close>×</button></div>
+    <p class="muted">Historia escrita por la comunidad de tu nación (visible para todo el mundo).</p>
+    <form id="wiki-form" class="form">
+      <label class="field"><span>Lema nacional</span><input name="motto" maxlength="120" placeholder="Unidos venceremos"></label>
+      <label class="field"><span>Historia</span><textarea name="history" rows="7" maxlength="2000" placeholder="Cuenta la historia de tu nación…"></textarea></label>
+      <button class="btn primary" type="submit">Publicar</button>
+      <p class="form-error" id="wiki-error"></p>
+    </form>
+  `);
+  card.querySelector('[data-close]')!.addEventListener('click', close);
+  card.querySelector<HTMLFormElement>('#wiki-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target as HTMLFormElement);
+    const error = card.querySelector<HTMLElement>('#wiki-error')!;
+    error.textContent = '';
+    try {
+      await api.updateWiki(countryId, String(data.get('history') ?? ''), String(data.get('motto') ?? ''));
+      close();
+      toast('📖 Wiki publicada.');
+      onDone();
+    } catch (err) {
+      error.textContent = err instanceof Error ? err.message : 'Error';
+    }
+  });
+}
+
+// ── Perfil público de país (Wiki + acciones) ──────────────────────────────
+
+export function openCountryModal(country: PublicCountry, ctx: PanelContext, onDone: () => void): void {
+  const treatyKinds = [
+    { value: 'non_aggression', label: '🕊️ No agresión' },
+    { value: 'free_trade', label: '🛒 Libre comercio' },
+    { value: 'mutual_defense', label: '🛡️ Defensa mutua' },
+  ];
+  const myId = ctx.session?.country?.id ?? ctx.session?.citizenship?.countryId ?? null;
+  const actions = myId && myId !== country.id
+    ? `
+      <form id="country-actions" class="form">
+        <label class="field"><span>Tratado</span>
+          <select name="treaty">${treatyKinds.map((k) => `<option value="${k.value}">${k.label}</option>`).join('')}</select></label>
+        <label class="field"><span>Espionaje (GDD §6.2)</span>
+          <select name="mission">
+            <option value="recon">🔭 Reconocimiento (300 CG)</option>
+            <option value="sabotage">💣 Sabotaje (600 CG)</option>
+            <option value="heist">💰 Robo de CG (900 CG)</option>
+            <option value="proxy">🔥 Guerra proxy (700 CG)</option>
+          </select></label>
+        <div class="btn-row">
+          <button class="btn" id="sign-treaty" type="button">🤝 Firmar tratado</button>
+          <button class="btn" id="send-mission" type="button">🕵️ Enviar misión</button>
+        </div>
+        <button class="btn danger" id="declare-war" type="button">⚔️ Declarar la guerra (1000 CG)</button>
+        <p class="form-error" id="country-error"></p>
+      </form>`
+    : '<p class="muted">Gobierna un país para actuar contra esta nación.</p>';
+
+  const treaties = country.treaties.length > 0
+    ? `<ul class="news-list">${country.treaties.map((t) => `<li>${treatyKinds.find((k) => k.value === t.kind)?.label ?? t.kind} con ${ctx.world?.countries.find((c) => c.id === t.with)?.name ?? t.with}</li>`).join('')}</ul>`
+    : '<p class="muted">Sin tratados.</p>';
+
+  const { card, close } = openModal(`
+    <div class="modal-title"><h2>${country.flagSvg ? `<span class="flag-sm">${country.flagSvg}</span>` : ''} ${country.name}</h2><button class="modal-close" data-close>×</button></div>
+    <p class="muted">${country.wiki.motto ? `«${country.wiki.motto}» · ` : ''}${country.npc ? 'Nación original del mundo (NPC)' : 'Fundada por un jugador'}${country.isPariah ? ' · 🚩 Estado Paria' : ''}</p>
+    <div class="stat-card"><b>Población</b><span>${fmt(country.population)}</span></div>
+    <div class="stat-card"><b>PIB</b><span>${fmt(country.gdp)} CG</span></div>
+    <div class="stat-card"><b>Moneda local</b><span>${country.currencyCode}</span></div>
+    <div class="stat-card"><b>Territorio</b><span>${country.hexCount} hexes</span></div>
+    <div class="stat-card"><b>Felicidad</b><span>${country.happiness}/100</span></div>
+    <h3 class="sub">📜 Historia (Wiki)</h3>
+    <p class="muted">${country.wiki.history ? country.wiki.history.replace(/\n/g, '<br>') : 'Esta nación aún no ha escrito su historia.'}</p>
+    <h3 class="sub">🤝 Tratados</h3>
+    ${treaties}
+    ${actions}
+  `);
+  card.querySelector('[data-close]')!.addEventListener('click', close);
+  const error = () => card.querySelector<HTMLElement>('#country-error')!;
+
+  card.querySelector('#sign-treaty')?.addEventListener('click', async () => {
+    const kind = String(new FormData(card.querySelector<HTMLFormElement>('#country-actions')!).get('treaty'));
+    try {
+      await api.proposeTreaty(country.id, kind as never);
+      close();
+      toast('🤝 Tratado firmado.');
+      onDone();
+    } catch (err) {
+      error().textContent = err instanceof Error ? err.message : 'Error';
+    }
+  });
+  card.querySelector('#send-mission')?.addEventListener('click', async () => {
+    const kind = String(new FormData(card.querySelector<HTMLFormElement>('#country-actions')!).get('mission'));
+    try {
+      const r = await api.launchMission(country.id, kind as never);
+      close();
+      toast(r.mission.status === 'success' ? `🕵️ ${r.mission.result ?? 'Éxito'}` : '🕵️ Misión fallida.');
+      onDone();
+    } catch (err) {
+      error().textContent = err instanceof Error ? err.message : 'Error';
+    }
+  });
+  card.querySelector('#declare-war')?.addEventListener('click', async () => {
+    try {
+      await api.declareWar(country.id);
+      close();
+      toast('⚔️ ¡Guerra declarada!');
+      onDone();
+    } catch (err) {
+      error().textContent = err instanceof Error ? err.message : 'Error';
+    }
+  });
+}
+
+// ── Tratado de paz (GDD §6.1) ─────────────────────────────────────────────
+
+export function openPeaceModal(warId: string, onDone: () => void): void {
+  const terms = [
+    { value: 'white_peace', label: '🤝 Paz blanca (sin cambios)', hint: 'Devuelve los hexágonos capturados.' },
+    { value: 'annex', label: '🗺️ Anexión', hint: 'Conserva el territorio capturado.' },
+    { value: 'indemnity', label: '💰 Indemnización', hint: 'Roba el 25% del CG enemigo.' },
+    { value: 'puppet', label: '🎭 Estado títere', hint: 'El perdedor tributa el 30% de su producción.' },
+  ];
+  const { card, close } = openModal(`
+    <div class="modal-title"><h2>🕊️ Tratado de Paz</h2><button class="modal-close" data-close>×</button></div>
+    <p class="muted">Elige los términos (la anexión, indemnización y títere solo puede imponerlas el agresor).</p>
+    <div class="btn-col" id="peace-terms">
+      ${terms.map((t) => `<button class="btn" data-term="${t.value}" title="${t.hint}">${t.label}<br><small class="muted">${t.hint}</small></button>`).join('')}
+    </div>
+    <p class="form-error" id="peace-error"></p>
+  `);
+  card.querySelector('[data-close]')!.addEventListener('click', close);
+  card.querySelectorAll<HTMLElement>('#peace-terms [data-term]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const error = card.querySelector<HTMLElement>('#peace-error')!;
+      error.textContent = '';
+      try {
+        await api.settleWar(warId, btn.dataset.term!);
+        close();
+        toast('🕊️ Paz firmada.');
+        onDone();
+      } catch (err) {
+        error.textContent = err instanceof Error ? err.message : 'Error';
+      }
+    }),
+  );
+}
+
+function fmt(n: number): string {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(Math.round(n));
 }

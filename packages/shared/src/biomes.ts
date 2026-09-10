@@ -3,7 +3,7 @@
 // para colores del mapa, etiquetas de la UI y futuras reglas del motor).
 // ============================================================================
 
-import type { Biome, ResourceType } from './types';
+import type { Biome } from './types';
 
 export const BIOME_LABELS: Record<Biome, string> = {
   plain: 'Llanura',
@@ -29,20 +29,4 @@ export const BIOME_DEFENSE: Record<Biome, number> = {
   mountain: 1,
   desert: 0.35,
   coast: 0.5,
-};
-
-export const RESOURCE_LABELS: Record<ResourceType, string> = {
-  food: 'Comida',
-  iron: 'Hierro',
-  coal: 'Carbón',
-  stone: 'Piedra',
-  oil: 'Petróleo',
-};
-
-export const RESOURCE_ICONS: Record<ResourceType, string> = {
-  food: '🌾',
-  iron: '⛏️',
-  coal: '⬛',
-  stone: '🧱',
-  oil: '🛢️',
 };

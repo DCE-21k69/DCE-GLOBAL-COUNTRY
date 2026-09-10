@@ -1,6 +1,6 @@
 {
   "name": "@dce/api",
-  "version": "0.2.0-alpha",
+  "version": "1.0.0-alpha",
   "private": true,
   "description": "Backend del simulador: autoridad del estado del mundo, ticks y API REST + WebSocket.",
   "type": "module",

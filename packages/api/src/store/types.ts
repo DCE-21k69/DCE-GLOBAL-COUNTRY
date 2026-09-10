@@ -1,11 +1,12 @@
 // ============================================================================
-// @dce/api — Contrato de la capa de persistencia.
-// Implementaciones: MemoryStore (dev/preview/tests) y PostgresStore (producción
-// vía DATABASE_URL). La simulación nunca habla con la base de datos
-// directamente: solo a través de esta interfaz (docs/01 §2).
+// @dce/api — Contrato de la capa de persistencia (v1.0).
+//
+// La simulación persiste por SNAPSHOT COMPLETO tras cada acción (escala
+// perfecta para el Alpha y simplifica la consistencia). Usuarios aparte.
+// Implementaciones: MemoryStore (dev/tests) y PostgresStore (DATABASE_URL).
 // ============================================================================
 
-import type { CountryMeta, Hex } from '@dce/shared';
+import type { PersistedState } from '@dce/shared';
 
 export interface StoredUser {
   id: string;
@@ -16,15 +17,12 @@ export interface StoredUser {
 }
 
 export interface Store {
+  // Usuarios (cuentas)
   createUser(user: StoredUser): Promise<void>;
   findUserByUsername(username: string): Promise<StoredUser | null>;
   findUserById(id: string): Promise<StoredUser | null>;
 
-  listCountries(): Promise<CountryMeta[]>;
-  createCountry(country: CountryMeta, ownership: Hex[]): Promise<void>;
-  /** Propiedad persistida: clave "q,r" → countryId (solo países de jugadores). */
-  getOwnership(): Promise<Map<string, string>>;
-
-  getInventories(countryId: string): Promise<Record<string, number> | null>;
-  saveInventories(countryId: string, inv: Record<string, number>): Promise<void>;
+  // Estado del mundo (snapshot)
+  loadState(): Promise<PersistedState | null>;
+  saveState(state: PersistedState): Promise<void>;
 }

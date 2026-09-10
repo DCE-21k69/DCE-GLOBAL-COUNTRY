@@ -1,6 +1,6 @@
 {
   "name": "@dce/simulation",
-  "version": "0.2.0-alpha",
+  "version": "1.0.0-alpha",
   "private": true,
   "description": "Motor de simulación: estado del mundo en RAM, fundación de naciones y Ticks económicos (determinista y testeable).",
   "type": "module",

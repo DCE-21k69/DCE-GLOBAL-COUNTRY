@@ -1,6 +1,6 @@
 {
   "name": "@dce/shared",
-  "version": "0.1.0-alpha",
+  "version": "1.0.0-alpha",
   "private": true,
   "description": "Lógica compartida entre cliente y servidor: matemáticas hexagonales, generación procedural y tipos de dominio.",
   "type": "module",

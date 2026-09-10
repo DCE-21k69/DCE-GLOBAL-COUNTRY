@@ -1,6 +1,6 @@
 {
   "name": "@dce/client",
-  "version": "0.1.0-alpha",
+  "version": "1.0.0-alpha",
   "private": true,
   "description": "Cliente web del simulador: mapa hexagonal WebGL (Pixi.js) + UI estratégica.",
   "type": "module",

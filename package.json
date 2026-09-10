@@ -1,6 +1,6 @@
 {
   "name": "dce-global-country",
-  "version": "0.1.0-alpha",
+  "version": "1.0.0-alpha",
   "private": true,
   "description": "DCE Global Country — Simulador Geopolítico de Naciones (MMO de navegador). Monorepo: shared (dominio), api (Fastify) y client (Pixi.js).",
   "packageManager": "pnpm@10.12.4",

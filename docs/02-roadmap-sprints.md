@@ -42,84 +42,95 @@
 
 ---
 
-## Sprint 2 — Constitución, Ciudadanía y Trabajo
+## Sprint 2 — Constitución, Ciudadanía y Trabajo ✅ *(entregado en v1.0)*
 
 **Objetivo:** las mecánicas sociales más básicas del GDD §3.2 y §5.
 
-- ✅ (adelantado en v0.2) Editor de Constitución con los 4 pilares y sus buffs/debuffs aplicados por el motor.
-- Sistema de ciudadanía: unirse a un país, roles (`worker`, `entrepreneur`, `soldier`, `minister`), con permisos.
-- Trabajo: los ciudadanos se asignan a edificios; sueldo fijado por el fundador/mercado; emigración si el sueldo es bajo.
-- Felicidad y salud básicas (consumo de comida por Tick).
-- Wiki Nacional v0 (historia comunitaria) y rate limiting pendientes del Sprint 1.
+- ✅ Editor de Constitución con los 4 pilares (`government`, `economy`, `militaryDoctrine`, `migrationPolicy`) y sus buffs/debuffs aplicados por el motor.
+- ✅ Ciudadanía: unirse a un país (adhesión aprobada por el fundador), emigrar, roles (`worker`, `entrepreneur`, `soldier`, `minister`).
+- ✅ Trabajo: los ciudadanos se asignan a edificios (+8% producción por obrero, máx. +50%); sueldo fijado por el fundador.
+- ✅ Felicidad por país (comida, constitución, guerra, hambruna) — base de la revolución (Sprint 6).
+- ✅ Wiki Nacional v0: lema, historia, PIB, población, moneda (editable por el fundador).
+- ✅ Creador de banderas con capas (patrón + 2 colores + emblema) con preview SVG y render final.
 
-**DoD:** un país con 5 ciudadanos produce según su Constitución; la elección democracia vs autocracia produce diferencias medibles en los Ticks.
+**DoD:** ✅ un país con ciudadanos produce según su Constitución; democracia vs autocracia y conscripción vs profesional producen diferencias medibles en los Ticks (testeado en el motor).
 
 ---
 
-## Sprint 3 — Economía: producción, CG y mercado 🚧 *(núcleo entregado en v0.2)*
+## Sprint 3 — Economía: producción, CG y mercado ✅ *(entregado en v1.0)*
 
 **Objetivo:** la cadena económica del GDD §4.
 
-- ✅ Motor de Ticks real (`packages/simulation`): producción → consumo → impuestos, cada Tick (10 min en producción, 45 s en dev).
-- ✅ Producción Tier 1 por biomas/recursos de los hexágonos propios, con los efectos de la Constitución aplicados (planificada/libre mercado/conscripción).
-- ✅ Consumo de comida por ciudadano con evento de hambruna (GDD §5).
-- ✅ Inventarios persistentes (tabla `inventories` / MemoryStore) y HUD con recursos reales.
-- ⏳ Pendiente: edificios Tier 1-3 explícitos, mercado global con libro de órdenes (Redis), monedas locales ligadas al PIB, estados del CG (crisis/deflación/guerra comercial) y logística (carreteras).
+- ✅ Motor de Ticks real: producción → consumo → impuestos, cada Tick (10 min en producción, 45 s en dev), con `serialize()`/`hydrate()` para snapshots.
+- ✅ Producción Tier 1 por biomas/recursos y efectos de la Constitución.
+- ✅ Edificios explícitos Tier 1–3 (`farm`, `mine`, `well`, `foundry`, `refinery`, `arms_factory`, `consumer_industry`) con cadenas de producción.
+- ✅ Mercado global con cotizaciones de oferta/demanda y spread (5%); compra/venta de recursos y productos derivados (acero, combustible, armas, bienes).
+- ✅ Mercado negro: compra anónima con sobreprecio (×1.8, ×2.2 si eres Estado Paria) y venta de armas a rebeliones.
+- ✅ Monedas locales: tasa de cambio PIB/CG por país (fuerte/débil según PIB).
+- ✅ Estados del CG: estable, crisis (inflación, caída de PIB), deflación, guerra comercial — con recuperación automática por ticks.
+- ✅ Logística: líneas de suministro de ejércitos a la capital; tropas rodeadas sin suministro.
+- ✅ Consumo de comida y eventos de hambruna.
 
-**DoD parcial:** ✅ la producción depende del territorio y de la Constitución y se acumula tick a tick; los precios de mercado y la cadena Tier 2/3 llegan con el resto del sprint.
+**DoD:** ✅ producción por territorio/Constitución acumulada tick a tick; mercado con oferta-demanda; un país sancionado compra solo vía mercado negro con sobreprecio.
 
 ---
 
-## Sprint 4 — Diplomacia, Asamblea Global y Mercado Negro
+## Sprint 4 — Diplomacia, Asamblea Global y Mercado Negro ✅ *(entregado en v1.0)*
 
 **Objetivo:** las capas "social" y "clandestina" del GDD §6.2–6.3.
 
-- Tratados formales aplicados por el servidor: no agresión, libre comercio, defensa mutua.
-- Asamblea Global: propuestas, votación ponderada por PIB/población, leyes mundiales (embargos, impuestos).
-- Botón rojo: retirarse de la Asamblea → Estado Paria (pierde mercado global, opera en mercado negro).
-- Mercado Negro: compra/venta anónima con precios inflados; financiar rebeliones en países vecinos.
-- Espionaje v0: misión de reconocimiento (revelar tropas enemigas).
+- ✅ Tratados formales aplicados por el servidor: `no_aggression`, `free_trade`, `mutual_defense` (propuesta + aceptación + cancelación).
+- ✅ Asamblea Global (ONU): propuestas, votación ponderada por PIB, cuotas de membresía, retirarse/reincorporarse.
+- ✅ Estado Paria: al retirarse de la Asamblea pierde el mercado global y opera en mercado negro con sobreprecio.
+- ✅ Embargos aprobados por la Asamblea con votación (necesitan mayoría ponderada).
+- ✅ Espionaje con 4 misiones: revelar inventarios, sabotear un edificio, revelar ejércitos, contrainteligencia.
 
-**DoD:** la Asamblea aprueba un embargo; el país embargado compra acero solo vía mercado negro con sobreprecio.
+**DoD:** ✅ la Asamblea aprueba una propuesta por votación ponderada; el país paria compra solo vía mercado negro.
 
 ---
 
-## Sprint 5 — Guerra hexágono por hexágono
+## Sprint 5 — Guerra hexágono por hexágono ✅ *(entregado en v1.0)*
 
 **Objetivo:** el combate del GDD §6.1.
 
-- Reclutamiento con las dos doctrinas militares (conscripción vs profesional).
-- Unidades: infantería (ocupa), tanques (rompen defensa), artillería (daña infraestructura); movimiento por hexágono y Tick.
-- Líneas de suministro: pathfinding a la capital; tropas rodeadas pierden suministro y se rinden.
-- Defensa por terreno/bioma y resolución de combate determinista (testeable en CI).
-- Tratados de paz: anexión, indemnización en CG, cambio de gobierno, estado títere (tributo 30%).
+- ✅ Declaración de guerra formal (cuesta 1000 CG) + motivo; guerras persistentes en `/api/wars`.
+- ✅ Reclutamiento con las dos doctrinas (conscripción ×0.5 coste, profesional calidad plena).
+- ✅ Unidades: infantería (ocupa), tanques (rompen defensa), artillería (bombardeo); movimiento y ataque hex a hex desde el mapa (clic + resaltado de vecinos).
+- ✅ Defensa por terreno/bioma, ratio de combate 1.3/0.77 y resolución determinista (testeada en CI).
+- ✅ Líneas de suministro: pathfinding a la capital; sin suministro las tropas sufren desgaste.
+- ✅ Tratados de paz: `white_peace`, `annex`, `indemnity`, `puppet` — estado títere con tributo del 30% de producción y gobierno impuesto.
 
-**DoD:** una guerra completa entre dos países demo termina con un tratado de paz y el territorio anexado visible en el mapa.
+**DoD:** ✅ una guerra completa entre dos países demo termina con un tratado de paz y el territorio anexado visible en el mapa (tests de motor).
 
 ---
 
-## Sprint 6 — Revoluciones, Ministerios y Wiki completa
+## Sprint 6 — Revoluciones, Ministerios y Wiki completa ✅ *(entregado en v1.0)*
 
 **Objetivo:** cerrar el bucle político del GDD §5.
 
-- Descontento → partidos rebeldes → compra de armas (mercado negro) → golpe de estado militar.
-- Ministerios delegados con permisos reales (economía, defensa, exterior).
-- Wiki Nacional completa: historia comunitaria, tratados, moneda, PIB.
-- Notificaciones y newsfeed del Dashboard.
+- ✅ Descontento (felicidad baja) → rebelión con fuerza creciente → golpe de estado.
+- ✅ Golpe exitoso transfiere la fundación (el rebelde pasa a ser `foundedBy`) sin intervención de staff.
+- ✅ Ministerios: nombrar/cesar ministros con rol `minister` (permisos reales de edición de Wiki).
+- ✅ Wiki Nacional completa: lema, historia, moneda, PIB.
+- ✅ Newsfeed del Dashboard (`/api/news`) + notificaciones en vivo por WebSocket (`news`, `famine`).
 
-**DoD:** un golpe de estado exitoso cambia al fundador de un país sin intervención de staff.
+**DoD:** ✅ un golpe de estado exitoso cambia al fundador de un país (test del motor).
 
 ---
 
-## Sprint 7 — Pulido, balance y MVP público
+## Sprint 7 — Pulido, balance y MVP público ✅ *(entregado en v1.0)*
 
 **Objetivo:** producto mínimo viable para jugadores reales.
 
-- Balance económico (simulaciones offline con replay del motor).
-- Creador de banderas con capas y validación (GDD §3.1).
-- Optimización de render (chunks estáticos, texturas atlas) y CDN.
-- Observabilidad: métricas (Prometheus), logs estructurados, dashboard de salud de Ticks.
-- **MVP listo:** fundar → producir → comerciar → aliarse → guerrear.
+- ✅ Creador de banderas con capas y validación (GDD §3.1) + preview SVG en directo.
+- ✅ HUD completo y navegación por pestañas: Dashboard / Mi País / Economía / Defensa / Diplomacia / Ciudadanía.
+- ✅ Órdenes militares desde el mapa (seleccionar ejército → mover/atacar en hex adyacente).
+- ✅ Persistencia por snapshots: cada acción y cada tick persisten el estado del motor (Memory/Postgres).
+- ✅ Toasts y eventos en vivo (fundaciones, guerras, noticias, ticks) por WebSocket.
+- ✅ Optimización de render (Pixi v8 WebGL con culling, marcadores por `toGlobal`).
+- ⏳ Diferido a Post-MVP: balance offline con replays, métricas Prometheus, CDN.
+
+**MVP listo:** ✅ fundar → producir → comerciar → aliarse → guerrear.
 
 ---
 

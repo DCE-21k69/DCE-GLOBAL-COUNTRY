@@ -29,7 +29,7 @@ export const START_INVENTORIES: Record<string, number> = {
   food: 600,
   iron: 0,
   coal: 0,
-  stone: 0,
+  stone: 40,
   oil: 0,
 };
 

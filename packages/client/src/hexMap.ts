@@ -1,22 +1,22 @@
 // ============================================================================
 // @dce/client — Renderizado del mapa hexagonal con Pixi.js v8 (WebGL).
 //
-// Estrategia de rendimiento (docs/04-frontend-mapa-hexagonal.md):
-//  · 1 Graphics por hexágono (estilo, no geometría): batch optimizado.
-//  · Solo se dibujan hexágonos dentro del viewport (culling por AABB).
-//  · Zoom continuo con escala; el re-estilo completo solo ocurre al
-//    cambiar de filtro, no al hacer zoom/pan.
-//  · Interacción por índice espacial Map<key, hex> en O(1).
+// Rendimiento (docs/04): 1 Graphics por hexágono (estilo, no geometría),
+// culling por viewport, zoom/pan por transformación de GPU, índice O(1).
+// Además: marcadores de ejércitos en pantalla (uiContainer) y resaltado
+// de hexágonos adyacentes para órdenes de movimiento/ataque.
 // ============================================================================
 
-import { Application, Graphics, Container, Point, type FederatedPointerEvent, type FederatedWheelEvent } from 'pixi.js';
+import { Application, Container, Graphics, Point, Text, type FederatedPointerEvent, type FederatedWheelEvent } from 'pixi.js';
 import {
   BIOME_COLORS,
   BIOME_DEFENSE,
   hexCorners,
   hexKey,
+  hexNeighbors,
   hexToPixel,
   pixelToHex,
+  type Army,
   type Hex,
   type MapFilter,
   type WorldHex,
@@ -26,15 +26,21 @@ import {
 export interface HexMapOptions {
   onSelect: (hex: WorldHex | null) => void;
   onFilterChange: (filter: MapFilter) => void;
+  onArmySelect: (army: Army | null) => void;
 }
 
-/** Borde "hull" para que los hexágonos compartan arista sin fisuras. */
 const BORDER_COLOR = 0x0a1120;
+const UNIT_LETTERS: Record<string, string> = { infantry: 'I', tank: 'T', artillery: 'A' };
 
-/** '#rrggbb' → 0xrrggbb (para Pixi Graphics). */
 function parseColor(hexColor: string): number | null {
   if (!/^#[0-9a-fA-F]{6}$/.test(hexColor)) return null;
   return parseInt(hexColor.slice(1), 16);
+}
+
+interface ArmyMarker {
+  container: Container;
+  g: Graphics;
+  army: Army;
 }
 
 export class HexMap {
@@ -43,18 +49,21 @@ export class HexMap {
   private uiContainer: Container;
   private hexes = new Map<string, WorldHex>();
   private graphics = new Map<string, Graphics>();
-  /** Colores reales por país (del servidor), en formato Pixi 0xrrggbb. */
   private colors = new Map<string, number>();
   private selection: Graphics;
+  private highlightLayer: Graphics;
   private filter: MapFilter = 'politics';
   private onSelect: HexMapOptions['onSelect'];
+  private onArmySelect: HexMapOptions['onArmySelect'];
 
-  /** Parámetros de cámara (pan + zoom). */
+  private armies = new Map<string, Army>();
+  private markers = new Map<string, ArmyMarker>();
+  private selectedArmyId: string | null = null;
+
   private pan = new Point(0, 0);
   private zoom = 1;
   private readonly minZoom = 0.5;
   private readonly maxZoom = 3;
-
   private size = 28;
   private hoveredKey: string | null = null;
   private dragging = false;
@@ -63,23 +72,25 @@ export class HexMap {
 
   constructor(canvas: HTMLCanvasElement, private opts: HexMapOptions) {
     this.onSelect = opts.onSelect;
+    this.onArmySelect = opts.onArmySelect;
     this.app = new Application();
     this.worldContainer = new Container();
     this.uiContainer = new Container();
-
     this.selection = new Graphics();
+    this.highlightLayer = new Graphics();
 
     this.app.init({ canvas, backgroundAlpha: 0, antialias: true, resolution: window.devicePixelRatio }).then(() => {
       this.app.stage.addChild(this.worldContainer);
       this.app.stage.addChild(this.uiContainer);
+      this.worldContainer.addChild(this.highlightLayer);
       this.uiContainer.addChild(this.selection);
       this.setupInteraction();
-      this.app.ticker.add(() => this.renderVisible());
+      this.app.ticker.add(() => this.renderFrame());
       this.centerWorld();
     });
   }
 
-  // ── API pública ──────────────────────────────────────────────────────────
+  // ── Mundo ────────────────────────────────────────────────────────────────
 
   setWorld(world: WorldMap): void {
     this.hexes.clear();
@@ -91,10 +102,6 @@ export class HexMap {
     this.centerWorld();
   }
 
-  /**
-   * Actualiza el mundo sin reiniciar la cámara (eventos en vivo: fundación,
-   * conquista…). Reutiliza los Graphics existentes y solo re-estiliza.
-   */
   updateWorld(world: WorldMap): void {
     this.hexes.clear();
     for (const h of world.hexes) this.hexes.set(hexKey(h), h);
@@ -112,8 +119,6 @@ export class HexMap {
   }
 
   private rebuildGraphics(world: WorldMap): void {
-    // Un Graphics por hexágono: la geometría se regenera solo en cambios
-    // de filtro/estado; zoom y pan no tocan estas primitivas.
     for (const hex of world.hexes) {
       if (this.graphics.has(hexKey(hex))) continue;
       const g = new Graphics();
@@ -154,11 +159,74 @@ export class HexMap {
     this.app.renderer.resize(w, h);
   }
 
-  // ── Interacción: click, hover, drag-pan, wheel-zoom ─────────────────────
+  // ── Ejércitos ────────────────────────────────────────────────────────────
+
+  setArmies(armies: Army[]): void {
+    this.armies.clear();
+    for (const a of armies) this.armies.set(a.id, a);
+    for (const [, marker] of this.markers) marker.container.destroy();
+    this.markers.clear();
+    for (const army of armies) {
+      const color = this.colors.get(army.countryId) ?? 0x8899aa;
+      const container = new Container();
+      const g = new Graphics();
+      g.circle(0, 0, 9).fill({ color, alpha: 0.95 });
+      g.circle(0, 0, 9).stroke({ color: 0xffffff, width: 1.5 });
+      if (!army.supply) g.circle(0, 0, 12).stroke({ color: 0xff3333, width: 2 });
+      const letter = new Text({
+        text: UNIT_LETTERS[army.unitType] ?? '?',
+        style: { fontSize: 10, fill: 0xffffff, fontWeight: 'bold' },
+      });
+      letter.anchor.set(0.5);
+      container.addChild(g);
+      container.addChild(letter);
+      container.eventMode = 'static';
+      container.cursor = 'pointer';
+      container.on('pointerdown', (e: FederatedPointerEvent) => {
+        e.stopPropagation();
+        this.selectArmy(army.id);
+      });
+      this.uiContainer.addChild(container);
+      this.markers.set(army.id, { container, g, army });
+    }
+    this.updateArmyHighlights();
+  }
+
+  selectArmy(armyId: string | null): void {
+    this.selectedArmyId = armyId;
+    if (armyId) {
+      const army = this.armies.get(armyId);
+      this.onArmySelect(army ?? null);
+    } else {
+      this.onArmySelect(null);
+    }
+    this.updateArmyHighlights();
+  }
+
+  getSelectedArmy(): Army | null {
+    return this.selectedArmyId ? this.armies.get(this.selectedArmyId) ?? null : null;
+  }
+
+  private updateArmyHighlights(): void {
+    this.highlightLayer.clear();
+    const army = this.getSelectedArmy();
+    if (!army) return;
+    // Todo en coordenadas del mundo (la capa vive en worldContainer).
+    const armyCenter = hexToPixel(army.hex.q, army.hex.r, this.size);
+    this.highlightLayer.circle(armyCenter.x, armyCenter.y, 13).stroke({ color: 0xffd54a, width: 2.5, alpha: 0.9 });
+    for (const n of hexNeighbors(army.hex)) {
+      const hex = this.hexes.get(hexKey(n));
+      if (!hex) continue;
+      const color = hex.countryId === army.countryId ? 0x22c55e : hex.countryId !== null ? 0xef4444 : 0x9aa6b8;
+      const corners = hexCorners(hex.q, hex.r, this.size);
+      this.highlightLayer.poly(corners).stroke({ color, width: 2, alpha: 0.95, alignment: 0.5 });
+    }
+  }
+
+  // ── Interacción ──────────────────────────────────────────────────────────
 
   private setupInteraction(): void {
     const canvas = this.app.canvas;
-
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
     this.app.stage.on('pointerdown', (e: FederatedPointerEvent) => {
@@ -173,8 +241,10 @@ export class HexMap {
       if (e.button === 0) {
         const dist = Math.hypot(e.global.x - this.dragStart.x, e.global.y - this.dragStart.y);
         this.dragging = false;
-        // Click en el vacío (distancia corta) = deseleccionar.
-        if (dist < 5 && this.hoveredKey === null) this.select(null);
+        if (dist < 5 && this.hoveredKey === null) {
+          this.select(null);
+          this.selectArmy(null);
+        }
       }
     });
 
@@ -191,12 +261,11 @@ export class HexMap {
     this.app.stage.on('wheel', (e: FederatedWheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-      // Zoom anclado al cursor: ajustar el pan para mantener el punto bajo el ratón.
       const local = this.app.stage.toLocal(e.global);
       const newZoom = Math.min(this.maxZoom, Math.max(this.minZoom, this.zoom * factor));
       const k = newZoom / this.zoom;
-      this.pan.x = e.global.x - (local.x) * k;
-      this.pan.y = e.global.y - (local.y) * k;
+      this.pan.x = e.global.x - local.x * k;
+      this.pan.y = e.global.y - local.y * k;
       this.zoom = newZoom;
       this.applyCamera();
     });
@@ -207,7 +276,7 @@ export class HexMap {
     this.worldContainer.position.set(this.pan.x, this.pan.y);
   }
 
-  // ── Estilos por filtro (GDD §7: Política / Recursos / Militar) ───────────
+  // ── Estilos ──────────────────────────────────────────────────────────────
 
   private restyleAll(): void {
     for (const [key, g] of this.graphics) {
@@ -226,10 +295,9 @@ export class HexMap {
 
     switch (this.filter) {
       case 'politics':
-        fill =
-          hex.countryId !== null
-            ? this.colors.get(hex.countryId) ?? this.colorFromString(hex.countryId)
-            : 0x9aa6b8;
+        fill = hex.countryId !== null
+          ? this.colors.get(hex.countryId) ?? this.colorFromString(hex.countryId)
+          : 0x9aa6b8;
         opacity = hex.countryId ? 0.85 : 0.35;
         break;
       case 'resources':
@@ -237,37 +305,24 @@ export class HexMap {
         opacity = hex.resources.length > 0 ? 0.95 : 0.22;
         break;
       case 'military':
-        // Verde → rojo según defensa del terreno (GDD §6.1).
         fill = BIOME_COLORS[hex.biome];
         opacity = 0.3 + BIOME_DEFENSE[hex.biome] * 0.6;
         break;
     }
 
-    // Capitales: anillo blanco persistente en todos los filtros.
     g.poly(corners).fill({ color: fill, alpha: opacity });
-    // Borde "hull": sobresale 1px por fuera y evita fisuras entre celdas.
     g.poly(corners).stroke({ color: BORDER_COLOR, width: 1.5, alignment: 0.5 });
-    if (hex.isCapital) {
-      g.poly(corners).stroke({ color: 0xffffff, width: 2.5, alignment: 0 });
-    }
+    if (hex.isCapital) g.poly(corners).stroke({ color: 0xffffff, width: 2.5, alignment: 0 });
 
-    if (this.filter === 'resources') {
-      const anchor = this.anchorOf(hex);
-      if (hex.resources.length > 0) {
-        // Marcador circular: un punto por recurso (máx. 2) alrededor del centro.
-        g.circle(anchor.x + 6, anchor.y - 6, 7).fill({ color: 0x0a1120, alpha: 0.9 });
-        g.circle(anchor.x + 6, anchor.y - 6, 7).stroke({ color: 0xffffff, width: 1 });
-      }
+    if (this.filter === 'resources' && hex.resources.length > 0) {
+      const c = hexToPixel(hex.q, hex.r, this.size);
+      g.circle(c.x + 6, c.y - 6, 7).fill({ color: 0x0a1120, alpha: 0.9 });
+      g.circle(c.x + 6, c.y - 6, 7).stroke({ color: 0xffffff, width: 1 });
     }
 
     if (this.hoveredKey === hexKey(hex)) {
       g.poly(corners).stroke({ color: 0xffffff, width: 2, alignment: 0.5 });
     }
-  }
-
-  private anchorOf(hex: Hex): { x: number; y: number } {
-    // Centro del hexágono en coordenadas locales del contenedor.
-    return hexToPixel(hex.q, hex.r, this.size);
   }
 
   private colorFromString(str: string): number {
@@ -276,9 +331,10 @@ export class HexMap {
     return (hash & 0xffffff) | 0x222222;
   }
 
-  // ── Render con culling ──────────────────────────────────────────────────
+  // ── Frame loop ───────────────────────────────────────────────────────────
 
-  private renderVisible(): void {
+  private renderFrame(): void {
+    // Culling del terreno.
     const local = this.app.stage.toLocal(new Point(0, 0));
     const w = this.app.screen.width / this.zoom;
     const h = this.app.screen.height / this.zoom;
@@ -291,12 +347,22 @@ export class HexMap {
       const hex = this.hexes.get(key);
       if (!hex) continue;
       const c = hexToPixel(hex.q, hex.r, this.size);
-      g.visible =
-        c.x >= left && c.x <= right && c.y >= top && c.y <= bottom;
+      g.visible = c.x >= left && c.x <= right && c.y >= top && c.y <= bottom;
+    }
+
+    // Posicionar marcadores de ejércitos en coordenadas de pantalla.
+    for (const [id, marker] of this.markers) {
+      const army = this.armies.get(id);
+      if (!army) continue;
+      const c = hexToPixel(army.hex.q, army.hex.r, this.size);
+      const p = this.worldContainer.toGlobal(new Point(c.x, c.y));
+      marker.container.position.set(p.x, p.y);
     }
   }
 
-  // ── Selección ───────────────────────────────────────────────────────────
+  // ── Selección de hexágonos ───────────────────────────────────────────────
+
+  private selected: WorldHex | null = null;
 
   private select(hex: WorldHex | null): void {
     this.selected = hex;
@@ -304,29 +370,15 @@ export class HexMap {
     this.onSelect(hex);
   }
 
-  private selected: WorldHex | null = null;
-
   private updateSelection(): void {
     this.selection.clear();
     if (!this.selected) return;
     const corners = hexCorners(this.selected.q, this.selected.r, this.size);
-    this.selection
-      .poly(corners)
-      .stroke({ color: 0xffffff, width: 2.5, alignment: 0.5 });
-    // Halo pulsante sutil.
-    this.selection
-      .poly(corners)
-      .stroke({ color: 0xffd54a, width: 4, alignment: 0.5, alpha: 0.5 });
+    this.selection.poly(corners).stroke({ color: 0xffffff, width: 2.5, alignment: 0.5 });
+    this.selection.poly(corners).stroke({ color: 0xffd54a, width: 4, alignment: 0.5, alpha: 0.5 });
   }
 
   get selectedHex(): WorldHex | null {
     return this.selected;
-  }
-
-  /** Pixel de pantalla → hexágono (para inspección y futuros clics de menú contextual). */
-  hexAtScreen(x: number, y: number): WorldHex | null {
-    const local = this.app.stage.toLocal(new Point(x, y));
-    const hex = pixelToHex(local.x, local.y, this.size);
-    return this.hexes.get(hexKey(hex)) ?? null;
   }
 }

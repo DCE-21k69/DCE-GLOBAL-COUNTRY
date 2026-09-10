@@ -7,6 +7,7 @@ export interface WsHandlers {
   onCountryCreated?: (payload: { country: { id: string; name: string; color: string } }) => void;
   onTick?: (payload: { nextTickAt: number; tickSeconds: number }) => void;
   onFamine?: (payload: { countryId: string }) => void;
+  onNews?: (payload: { event: { message: string } }) => void;
   onOpen?: () => void;
 }
 
@@ -33,6 +34,7 @@ export function connectWs(handlers: WsHandlers): () => void {
       if (msg.type === 'country_created') handlers.onCountryCreated?.(msg.payload);
       if (msg.type === 'tick') handlers.onTick?.(msg.payload);
       if (msg.type === 'famine') handlers.onFamine?.(msg.payload);
+      if (msg.type === 'news') handlers.onNews?.(msg.payload);
     };
     ws.onclose = () => {
       if (!closed) {
